@@ -13,7 +13,25 @@ setup(
     url="https://github.com/aashishvanand/airports-py",
     classifiers=[
         "Programming Language :: Python :: 3",
-        "License :: OSI Approved :: Creative Commons Attribution License",
+        "Programming Language :: Python :: 3.0",
+        "Programming Language :: Python :: 3.1",
+        "Programming Language :: Python :: 3.2",
+        "Programming Language :: Python :: 3.3",
+        "Programming Language :: Python :: 3.4",
+        "Programming Language :: Python :: 3.5",
+        "Programming Language :: Python :: 3.6",
+        "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
+        "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
+    keywords=[
+        "airport", "iata", "icao", "data", "library", "aviation", 
+        "travel", "geography", "lookup", "codes", "continent", 
+        "city", "country", "flightradar24", "radarbox", "flightaware"
+    ]
 )
