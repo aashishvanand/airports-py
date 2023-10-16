@@ -12,7 +12,7 @@ Use this section to tell people about which versions of your project are current
 
 Use this section to tell people how to report a vulnerability.
 
-If you discover a security vulnerability within this project, please send an email to [Your Name] at [Your Email Address]. All security vulnerabilities will be promptly addressed. Please do not disclose security-related issues publicly until a fix has been announced.
+If you discover a security vulnerability within this project, please send an email to [Aashish Vivekanand] at [aashishvanand@gmail.com]. All security vulnerabilities will be promptly addressed. Please do not disclose security-related issues publicly until a fix has been announced.
 
 ### How to Report a Vulnerability
 
