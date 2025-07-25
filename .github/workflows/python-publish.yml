@@ -1,40 +1,146 @@
-# This workflow will upload a Python Package using Twine when a release is created
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python#publishing-to-package-registries
-
-# This workflow uses actions that are not certified by GitHub.
-# They are provided by a third-party and are governed by
-# separate terms of service, privacy policy, and support
-# documentation.
-
-name: Upload Python Package
+# This workflow will test, build, and publish a Python Package using Twine
+name: Build, Test & Publish Python Package
 
 on:
   push:
     branches:
       - release
+      - main
+  release:
+    types: [published]
+  pull_request:
+    branches: [ main, release ]
+  workflow_dispatch:  # Allow manual triggering
 
 permissions:
-  contents: read
+  contents: write
+  id-token: write
 
 jobs:
-  deploy:
-
+  test:
     runs-on: ubuntu-latest
-
+    strategy:
+      matrix:
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+    
     steps:
-    - uses: actions/checkout@v3
-    - name: Set up Python
-      uses: actions/setup-python@v3
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
       with:
-        python-version: '3.x'
+        python-version: ${{ matrix.python-version }}
+    
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install build
+        pip install pytest pytest-cov
+        pip install -e .
+    
+    - name: Verify package installation
+      run: |
+        python -c "import airports.airport_data; print('Package imported successfully')"
+        python -c "from airports import airport_data; print(f'Loaded {len(airport_data.airports)} airports')"
+    
+    - name: Run tests
+      run: |
+        python -m pytest tests/ -v --cov=airports --cov-report=xml
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
+    
+    - name: Install build dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build twine
+    
+    - name: Check for airports data file
+      run: |
+        if [ ! -f "airports/data/airports.gz" ]; then
+          echo "❌ Missing airports.gz file"
+          echo "This file is required for the package to work."
+          echo "Please ensure airports/data/airports.gz exists before publishing."
+          exit 1
+        else
+          echo "✅ Found airports.gz file"
+          # Verify it's valid
+          python scripts/generate_airports_gz.py --verify-only
+        fi
+    
     - name: Build package
       run: python -m build
-    - name: Publish package
-      uses: pypa/gh-action-pypi-publish@27b31702a0e7fc50959f5ad993c78deac1bdfc29
+    
+    - name: Check package
+      run: twine check dist/*
+    
+    - name: List package contents
+      run: |
+        echo "📦 Package contents:"
+        tar -tzf dist/*.tar.gz | head -20
+        echo "..."
+        echo "✅ Package built successfully"
+    
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
       with:
-        user: __token__
-        password: ${{ secrets.PYPI_API_TOKEN }}
+        name: python-package-distributions
+        path: dist/
+
+  publish-to-testpypi:
+    name: Publish to TestPyPI
+    # Publish to TestPyPI on main branch pushes or manual trigger
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    needs: [test, build]
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/airports-py
+    
+    steps:
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: python-package-distributions
+        path: dist/
+    
+    - name: Publish package to TestPyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        repository-url: https://test.pypi.org/legacy/
+        print-hash: true
+
+  publish-to-pypi:
+    name: Publish to PyPI
+    # Only publish to PyPI on release branch pushes
+    if: github.event_name == 'push' && github.ref == 'refs/heads/release'
+    needs: [test, build]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/airports-py
+    
+    steps:
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: python-package-distributions
+        path: dist/
+    
+    - name: Publish package to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
