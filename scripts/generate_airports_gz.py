@@ -2,6 +2,8 @@
 """
 Script to generate compressed airport data from JSON source.
 This script compresses the airports.json file into airports.gz for efficient distribution.
+
+Note: The output file uses UTF-8 encoding. Ensure your reading environment supports UTF-8.
 """
 
 import gzip
@@ -11,7 +13,7 @@ import argparse
 import sys
 from pathlib import Path
 
-def compress_airport_data(source_file: str, output_file: str, compression_level: int = 9) -> bool:
+def compress_airport_data(source_file: str, output_file: str, compression_level: int = 9, use_ascii: bool = False) -> bool:
     """
     Compress airport JSON data to gzipped format.
     
@@ -19,6 +21,7 @@ def compress_airport_data(source_file: str, output_file: str, compression_level:
         source_file: Path to source JSON file
         output_file: Path to output gzipped file
         compression_level: Compression level (1-9, default 9 for best compression)
+        use_ascii: If True, use ASCII encoding for better compatibility (default: False for UTF-8)
     
     Returns:
         True if successful, False otherwise
@@ -51,9 +54,11 @@ def compress_airport_data(source_file: str, output_file: str, compression_level:
             print(f"Created directory: {output_dir}")
         
         # Write compressed data
-        print(f"Compressing data with level {compression_level}...")
+        encoding_info = "ASCII" if use_ascii else "UTF-8"
+        print(f"Compressing data with level {compression_level} (encoding: {encoding_info})...")
+        
         with gzip.open(output_file, 'wt', encoding='utf-8', compresslevel=compression_level) as f:
-            json.dump(data, f, separators=(',', ':'), ensure_ascii=False)
+            json.dump(data, f, separators=(',', ':'), ensure_ascii=use_ascii)
         
         # Calculate file sizes and compression ratio
         original_size = os.path.getsize(source_file)
@@ -64,6 +69,9 @@ def compress_airport_data(source_file: str, output_file: str, compression_level:
         print(f"Original size: {original_size:,} bytes ({original_size / 1024 / 1024:.2f} MB)")
         print(f"Compressed size: {compressed_size:,} bytes ({compressed_size / 1024:.2f} KB)")
         print(f"Compression ratio: {compression_ratio:.1f}%")
+        
+        if not use_ascii:
+            print("Note: Output uses UTF-8 encoding. Ensure your reading environment supports UTF-8.")
         
         return True
         
@@ -128,8 +136,11 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Generate with default settings
+  # Generate with default settings (UTF-8 encoding)
   python scripts/generate_airports_gz.py
+  
+  # Generate with ASCII encoding for better compatibility
+  python scripts/generate_airports_gz.py --ascii
   
   # Generate with custom compression level
   python scripts/generate_airports_gz.py --compression 6
@@ -163,6 +174,12 @@ Examples:
     )
     
     parser.add_argument(
+        '--ascii',
+        action='store_true',
+        help='Use ASCII encoding instead of UTF-8 for better compatibility'
+    )
+    
+    parser.add_argument(
         '--verify-only',
         action='store_true',
         help='Only verify existing compressed file, do not generate'
@@ -185,7 +202,7 @@ Examples:
     print("Airport Data Compression Tool")
     print("=" * 40)
     
-    success = compress_airport_data(args.source, args.output, args.compression)
+    success = compress_airport_data(args.source, args.output, args.compression, args.ascii)
     
     if not success:
         print("Compression failed!")

@@ -1,16 +1,16 @@
-# This workflow will test, build, and publish a Python Package using Twine when a release is created
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python#publishing-to-package-registries
-
+# This workflow will test, build, and publish a Python Package using Twine
 name: Build, Test & Publish Python Package
 
 on:
   push:
     branches:
       - release
+      - main
   release:
     types: [published]
   pull_request:
     branches: [ main, release ]
+  workflow_dispatch:  # Allow manual triggering
 
 permissions:
   contents: write
@@ -34,9 +34,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        # Install only test dependencies since the package has no external dependencies
         pip install pytest pytest-cov
-        # Install the package itself in development mode
         pip install -e .
     
     - name: Verify package installation
@@ -72,10 +70,18 @@ jobs:
         python -m pip install --upgrade pip
         pip install build twine
     
-    - name: Generate compressed data file
+    - name: Check for airports data file
       run: |
-        # Ensure the compressed data file exists for packaging
-        python scripts/generate_airports_gz.py --verify-only || echo "Compressed data file missing, please ensure airports/data/airports.gz exists"
+        if [ ! -f "airports/data/airports.gz" ]; then
+          echo "❌ Missing airports.gz file"
+          echo "This file is required for the package to work."
+          echo "Please ensure airports/data/airports.gz exists before publishing."
+          exit 1
+        else
+          echo "✅ Found airports.gz file"
+          # Verify it's valid
+          python scripts/generate_airports_gz.py --verify-only
+        fi
     
     - name: Build package
       run: python -m build
@@ -83,37 +89,23 @@ jobs:
     - name: Check package
       run: twine check dist/*
     
+    - name: List package contents
+      run: |
+        echo "📦 Package contents:"
+        tar -tzf dist/*.tar.gz | head -20
+        echo "..."
+        echo "✅ Package built successfully"
+    
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
         name: python-package-distributions
         path: dist/
 
-  publish-to-pypi:
-    name: Publish to PyPI
-    if: github.event_name == 'push' && github.ref == 'refs/heads/release'
-    needs: [test, build]
-    runs-on: ubuntu-latest
-    environment:
-      name: pypi
-      url: https://pypi.org/p/airports-py
-    
-    steps:
-    - name: Download build artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: python-package-distributions
-        path: dist/
-    
-    - name: Publish package to PyPI
-      uses: pypa/gh-action-pypi-publish@release/v1
-      with:
-        user: __token__
-        password: ${{ secrets.PYPI_API_TOKEN }}
-
   publish-to-testpypi:
     name: Publish to TestPyPI
-    if: github.event_name == 'pull_request'
+    # Publish to TestPyPI on main branch pushes or manual trigger
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     needs: [test, build]
     runs-on: ubuntu-latest
     environment:
@@ -131,96 +123,24 @@ jobs:
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
         repository-url: https://test.pypi.org/legacy/
-        user: __token__
-        password: ${{ secrets.TEST_PYPI_API_TOKEN }}
+        print-hash: true
 
-  github-release:
-    name: Create GitHub Release
+  publish-to-pypi:
+    name: Publish to PyPI
+    # Only publish to PyPI on release branch pushes
     if: github.event_name == 'push' && github.ref == 'refs/heads/release'
-    needs: [test, build, publish-to-pypi]
+    needs: [test, build]
     runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/airports-py
     
     steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-    
     - name: Download build artifacts
       uses: actions/download-artifact@v4
       with:
         name: python-package-distributions
         path: dist/
     
-    - name: Extract version from setup.py
-      id: get_version
-      run: |
-        VERSION=$(python setup.py --version)
-        echo "version=$VERSION" >> $GITHUB_OUTPUT
-        echo "tag=v$VERSION" >> $GITHUB_OUTPUT
-    
-    - name: Generate changelog
-      id: changelog
-      run: |
-        # Simple changelog generation - you might want to use a more sophisticated tool
-        echo "## What's Changed" > TEMP_CHANGELOG.md
-        echo "" >> TEMP_CHANGELOG.md
-        echo "### 🆕 New Features" >> TEMP_CHANGELOG.md
-        echo "- Enhanced airport data library with comprehensive search capabilities" >> TEMP_CHANGELOG.md
-        echo "- Geographic proximity search with customizable radius" >> TEMP_CHANGELOG.md
-        echo "- Distance calculation between airports using great-circle formula" >> TEMP_CHANGELOG.md
-        echo "- Search airports by name with case-insensitive matching" >> TEMP_CHANGELOG.md
-        echo "- Advanced multi-criteria filtering system" >> TEMP_CHANGELOG.md
-        echo "- Autocomplete suggestions for search interfaces" >> TEMP_CHANGELOG.md
-        echo "- Timezone-based airport lookup" >> TEMP_CHANGELOG.md
-        echo "- External links integration (Wikipedia, FlightRadar24, Radarbox, FlightAware)" >> TEMP_CHANGELOG.md
-        echo "" >> TEMP_CHANGELOG.md
-        echo "### 🔄 Improvements" >> TEMP_CHANGELOG.md
-        echo "- Better error handling with specific error messages" >> TEMP_CHANGELOG.md
-        echo "- Enhanced input validation with regex patterns" >> TEMP_CHANGELOG.md
-        echo "- Comprehensive test coverage for all functions" >> TEMP_CHANGELOG.md
-        echo "- Fixed missing airports.gz file in package distribution" >> TEMP_CHANGELOG.md
-        echo "- Improved search performance with indexing" >> TEMP_CHANGELOG.md
-        echo "- Fixed build dependencies and CI/CD pipeline" >> TEMP_CHANGELOG.md
-        echo "" >> TEMP_CHANGELOG.md
-        echo "### 📋 Technical Details" >> TEMP_CHANGELOG.md
-        echo "- Python 3.6+ compatibility" >> TEMP_CHANGELOG.md
-        echo "- Zero external dependencies" >> TEMP_CHANGELOG.md
-        echo "- Efficient gzipped data storage" >> TEMP_CHANGELOG.md
-        echo "- Type hints and comprehensive documentation" >> TEMP_CHANGELOG.md
-        
-        # Set output for use in release
-        echo "changelog_file=TEMP_CHANGELOG.md" >> $GITHUB_OUTPUT
-    
-    - name: Create Release
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: ${{ steps.get_version.outputs.tag }}
-        name: Release ${{ steps.get_version.outputs.version }}
-        body_path: ${{ steps.changelog.outputs.changelog_file }}
-        files: |
-          dist/*.tar.gz
-          dist/*.whl
-        draft: false
-        prerelease: false
-        generate_release_notes: true
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  update-release-branch:
-    name: Update release branch
-    if: github.event_name == 'release' && github.event.action == 'published'
-    runs-on: ubuntu-latest
-    
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        ref: main
-        fetch-depth: 0
-    
-    - name: Merge release to main
-      run: |
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-        git checkout main
-        git merge origin/release
-        git push origin main
+    - name: Publish package to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
