@@ -1,0 +1,48 @@
+from setuptools import setup, find_packages
+
+setup(
+    name="airports-py",
+    version="2.0.0",
+    packages=find_packages(),
+    install_requires=[],
+    author="Aashish Vivekanand",
+    author_email="aashishvanand@gmail.com",
+    description="A comprehensive library providing easy retrieval of airport data based on IATA, ICAO, city codes, country codes, and continents. Features geographic search, distance calculation, timezone lookup, and external links integration.",
+    long_description=open('README.md').read(),
+    long_description_content_type="text/markdown",
+    url="https://aashishvanand.me/airport-data-js/",
+    project_urls={
+        "Source Code": "https://github.com/aashishvanand/airports-py",
+        "Bug Reports": "https://github.com/aashishvanand/airports-py/issues",
+        "Documentation": "https://github.com/aashishvanand/airports-py#readme",
+    },
+    classifiers=[
+        "Development Status :: 5 - Production/Stable",
+        "Intended Audience :: Developers",
+        "Topic :: Software Development :: Libraries :: Python Modules",
+        "Topic :: Scientific/Engineering :: GIS",
+        "Topic :: Database",
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.6",
+        "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
+        "License :: OSI Approved :: MIT License",
+        "Operating System :: OS Independent",
+    ],
+    keywords=[
+        "airport", "iata", "icao", "data", "library", "aviation", 
+        "travel", "geography", "lookup", "codes", "continent", 
+        "city", "country", "flightradar24", "radarbox", "flightaware",
+        "distance", "coordinates", "timezone", "search", "autocomplete",
+        "filtering", "geospatial", "proximity", "navigation"
+    ],
+    python_requires='>=3.6',
+    include_package_data=True,
+    package_data={
+        'airports': ['data/*.gz', 'data/*.json'],
+    },
+)
