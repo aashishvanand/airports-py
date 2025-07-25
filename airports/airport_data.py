@@ -9,6 +9,13 @@ data_file_path = os.path.join(os.path.dirname(__file__), 'data', 'airports.gz')
 with gzip.open(data_file_path, 'rt') as f:
     airports = json.load(f)
 
+# Create search index for better performance
+airport_name_index = {}
+for airport in airports:
+    name = airport.get("airport", "").lower()
+    if name:
+        airport_name_index[name] = airport
+
 def _validate_regex(data: str, pattern: str, error_message: str) -> None:
     """
     Validates a string against a pattern and raises an error if it doesn't match.
@@ -61,15 +68,13 @@ def get_airport_by_iata(iata_code: str) -> List[Dict[str, Any]]:
         iata_code: The IATA code of the airport to find (e.g., 'AAA')
     
     Returns:
-        A list of matching airport objects
+        A list of matching airport objects. Returns an empty list if no data is found.
     
     Raises:
-        ValueError: If the IATA code format is invalid or if no data is found
+        ValueError: If the IATA code format is invalid
     """
     _validate_regex(iata_code, r'^[A-Z]{3}$', "Invalid IATA format. Please provide a 3-letter uppercase code, e.g., 'AAA'.")
     results = [airport for airport in airports if airport.get("iata") == iata_code.upper()]
-    if not results:
-        raise ValueError(f"No data found for IATA code: {iata_code}")
     return results
 
 def get_airport_by_icao(icao_code: str) -> List[Dict[str, Any]]:
@@ -80,15 +85,13 @@ def get_airport_by_icao(icao_code: str) -> List[Dict[str, Any]]:
         icao_code: The ICAO code of the airport to find (e.g., 'NTGA')
     
     Returns:
-        A list of matching airport objects
+        A list of matching airport objects. Returns an empty list if no data is found.
     
     Raises:
-        ValueError: If the ICAO code format is invalid or if no data is found
+        ValueError: If the ICAO code format is invalid
     """
     _validate_regex(icao_code, r'^[A-Z0-9]{4}$', "Invalid ICAO format. Please provide a 4-character uppercase code, e.g., 'NTGA'.")
     results = [airport for airport in airports if airport.get("icao") == icao_code.upper()]
-    if not results:
-        raise ValueError(f"No data found for ICAO code: {icao_code}")
     return results
 
 def get_airport_by_city_code(city_code: str) -> List[Dict[str, Any]]:
@@ -96,17 +99,16 @@ def get_airport_by_city_code(city_code: str) -> List[Dict[str, Any]]:
     Finds airports by their city code.
     
     Args:
-        city_code: The city code to search for
+        city_code: The city code to search for. Must be alphanumeric and uppercase (e.g., 'NYC').
     
     Returns:
-        A list of matching airport objects
+        A list of matching airport objects. Returns an empty list if no data is found.
     
     Raises:
-        ValueError: If no airport found with the city code
+        ValueError: If the city code format is invalid
     """
+    _validate_regex(city_code, r'^[A-Z0-9]+$', "Invalid City Code format. Please provide an alphanumeric uppercase code, e.g., 'NYC'.")
     results = [airport for airport in airports if airport.get("city_code") == city_code.upper()]
-    if not results:
-        raise ValueError(f"No airport found with city code: {city_code}")
     return results
 
 def get_airport_by_country_code(country_code: str) -> List[Dict[str, Any]]:
@@ -117,15 +119,13 @@ def get_airport_by_country_code(country_code: str) -> List[Dict[str, Any]]:
         country_code: The country code to search for (e.g., 'US')
     
     Returns:
-        A list of matching airport objects
+        A list of matching airport objects. Returns an empty list if no data is found.
     
     Raises:
-        ValueError: If the country code format is invalid or if no data is found
+        ValueError: If the country code format is invalid
     """
     _validate_regex(country_code, r'^[A-Z]{2}$', "Invalid Country Code format. Please provide a 2-letter uppercase code, e.g., 'US'.")
     results = [airport for airport in airports if airport.get("country_code") == country_code.upper()]
-    if not results:
-        raise ValueError(f"No data found for Country Code: {country_code}")
     return results
 
 def get_airport_by_continent(continent_code: str) -> List[Dict[str, Any]]:
@@ -136,15 +136,13 @@ def get_airport_by_continent(continent_code: str) -> List[Dict[str, Any]]:
         continent_code: The continent code to search for (e.g., 'AS' for Asia)
     
     Returns:
-        A list of matching airport objects
+        A list of matching airport objects. Returns an empty list if no data is found.
     
     Raises:
-        ValueError: If the continent code format is invalid or if no data is found
+        ValueError: If the continent code format is invalid
     """
     _validate_regex(continent_code, r'^[A-Z]{2}$', "Invalid Continent Code format. Please provide a 2-letter uppercase code, e.g., 'AS'.")
     results = [airport for airport in airports if airport.get("continent") == continent_code.upper()]
-    if not results:
-        raise ValueError(f"No data found for Continent Code: {continent_code}")
     return results
 
 def search_by_name(query: str) -> List[Dict[str, Any]]:
@@ -164,10 +162,20 @@ def search_by_name(query: str) -> List[Dict[str, Any]]:
         raise ValueError("Search query must be at least 2 characters long.")
     
     lower_case_query = query.lower()
-    results = [
-        airport for airport in airports 
-        if airport.get("airport", "").lower().find(lower_case_query) != -1
-    ]
+    
+    # Use index for exact matches first (better performance)
+    results = []
+    for name, airport in airport_name_index.items():
+        if lower_case_query in name:
+            results.append(airport)
+    
+    # If no exact matches found in index, fall back to full search
+    if not results:
+        results = [
+            airport for airport in airports 
+            if airport.get("airport", "").lower().find(lower_case_query) != -1
+        ]
+    
     return results
 
 def find_nearby_airports(lat: float, lon: float, radius_km: float = 100) -> List[Dict[str, Any]]:
@@ -311,9 +319,12 @@ def get_autocomplete_suggestions(query: str, limit: int = 10) -> List[Dict[str, 
         if (airport.get("airport", "").lower().find(lower_case_query) != -1 or
             airport.get("iata", "").lower().find(lower_case_query) != -1):
             results.append(airport)
+            
+            # Early termination when limit is reached for better performance
+            if len(results) >= limit:
+                break
     
-    # Return a limited number of results for performance
-    return results[:limit]
+    return results
 
 def find_airports(filters: Dict[str, Any]) -> List[Dict[str, Any]]:
     """

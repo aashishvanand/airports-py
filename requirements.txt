@@ -1,1 +1,2 @@
-gzip
+# This package has no external dependencies
+# All required modules (gzip, json, os, math) are part of Python's standard library

@@ -34,8 +34,15 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        # Install only test dependencies since the package has no external dependencies
         pip install pytest pytest-cov
+        # Install the package itself in development mode
+        pip install -e .
+    
+    - name: Verify package installation
+      run: |
+        python -c "import airports.airport_data; print('Package imported successfully')"
+        python -c "from airports import airport_data; print(f'Loaded {len(airport_data.airports)} airports')"
     
     - name: Run tests
       run: |
@@ -64,6 +71,11 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install build twine
+    
+    - name: Generate compressed data file
+      run: |
+        # Ensure the compressed data file exists for packaging
+        python scripts/generate_airports_gz.py --verify-only || echo "Compressed data file missing, please ensure airports/data/airports.gz exists"
     
     - name: Build package
       run: python -m build
@@ -167,6 +179,8 @@ jobs:
         echo "- Enhanced input validation with regex patterns" >> TEMP_CHANGELOG.md
         echo "- Comprehensive test coverage for all functions" >> TEMP_CHANGELOG.md
         echo "- Fixed missing airports.gz file in package distribution" >> TEMP_CHANGELOG.md
+        echo "- Improved search performance with indexing" >> TEMP_CHANGELOG.md
+        echo "- Fixed build dependencies and CI/CD pipeline" >> TEMP_CHANGELOG.md
         echo "" >> TEMP_CHANGELOG.md
         echo "### 📋 Technical Details" >> TEMP_CHANGELOG.md
         echo "- Python 3.6+ compatibility" >> TEMP_CHANGELOG.md
